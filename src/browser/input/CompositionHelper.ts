@@ -4,6 +4,8 @@
  */
 
 import { IRenderService } from 'browser/services/Services';
+import { AndroidInputTransaction } from 'browser/input/AndroidInputTransaction';
+import * as Browser from 'common/Platform';
 import { IBufferService, ICoreService, IOptionsService } from 'common/services/Services';
 import { C0 } from 'common/data/EscapeSequences';
 
@@ -18,12 +20,19 @@ interface IPosition {
  * to the handler.
  */
 export class CompositionHelper {
+  private readonly _androidInput: AndroidInputTransaction | undefined;
+
   /**
    * Whether input composition is currently happening, eg. via a mobile keyboard, speech input or
    * IME. This variable determines whether the compositionText should be displayed on the UI.
    */
   private _isComposing: boolean;
   public get isComposing(): boolean { return this._isComposing; }
+  public get shouldSyncTextArea(): boolean { return !this._isAndroidInputMode; }
+
+  private get _isAndroidInputMode(): boolean {
+    return !!this._androidInput && !this._optionsService.rawOptions.screenReaderMode;
+  }
 
   /**
    * The position within the input textarea's value of the current composition.
@@ -53,12 +62,42 @@ export class CompositionHelper {
     this._isSendingComposition = false;
     this._compositionPosition = { start: 0, end: 0 };
     this._dataAlreadySent = '';
+    this._androidInput = Browser.isAndroid
+      ? new AndroidInputTransaction(this._textarea, data => this._coreService.triggerDataEvent(data, true))
+      : undefined;
+  }
+
+  public focus(): void {
+    if (!this._syncAndroidInputMode()) {
+      return;
+    }
+    this._androidInput!.activate();
+  }
+
+  public blur(): void {
+    this._androidInput?.deactivate();
+  }
+
+  public reset(): void {
+    this._androidInput?.reset();
+  }
+
+  public dispose(): void {
+    this._androidInput?.dispose();
+  }
+
+  public handleInput(ev: InputEvent): boolean {
+    return this._isAndroidInputMode ? this._androidInput!.handleInput(ev) : false;
   }
 
   /**
    * Handles the compositionstart event, activating the composition view.
    */
   public compositionstart(): void {
+    if (this._syncAndroidInputMode()) {
+      this._compositionView.classList.remove('active');
+      return;
+    }
     this._isComposing = true;
     this._compositionPosition.start = this._textarea.value.length;
     this._compositionView.textContent = '';
@@ -71,6 +110,9 @@ export class CompositionHelper {
    * @param ev The event.
    */
   public compositionupdate(ev: Pick<CompositionEvent, 'data'>): void {
+    if (this._syncAndroidInputMode()) {
+      return;
+    }
     this._compositionView.textContent = ev.data;
     this.updateCompositionElements();
     setTimeout(() => {
@@ -83,6 +125,9 @@ export class CompositionHelper {
    * the handler.
    */
   public compositionend(): void {
+    if (this._syncAndroidInputMode()) {
+      return;
+    }
     this._finalizeComposition(true);
   }
 
@@ -92,6 +137,9 @@ export class CompositionHelper {
    * @returns Whether the Terminal should continue processing the keydown event.
    */
   public keydown(ev: KeyboardEvent): boolean {
+    if (this._syncAndroidInputMode()) {
+      return this._androidInput!.keydown(ev);
+    }
     if (this._isComposing || this._isSendingComposition) {
       if (ev.keyCode === 229) {
         // Continue composing if the keyCode is the "composition character"
@@ -211,6 +259,9 @@ export class CompositionHelper {
    *   necessary as the IME events across browsers are not consistently triggered.
    */
   public updateCompositionElements(dontRecurse?: boolean): void {
+    if (this._syncAndroidInputMode()) {
+      return;
+    }
     if (!this._isComposing) {
       return;
     }
@@ -242,5 +293,18 @@ export class CompositionHelper {
     if (!dontRecurse) {
       setTimeout(() => this.updateCompositionElements(true), 0);
     }
+  }
+
+  private _syncAndroidInputMode(): boolean {
+    if (!this._androidInput) {
+      return false;
+    }
+    const enabled = this._isAndroidInputMode;
+    this._textarea.classList.toggle('xterm-android-ime-textarea', enabled);
+    this._compositionView.classList.toggle('xterm-android-ime-composition', enabled);
+    if (enabled) {
+      this._compositionView.classList.remove('active');
+    }
+    return enabled;
   }
 }

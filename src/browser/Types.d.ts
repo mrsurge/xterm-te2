@@ -37,6 +37,12 @@ export type LineData = CharData[];
 
 export interface ICompositionHelper {
   readonly isComposing: boolean;
+  readonly shouldSyncTextArea: boolean;
+  focus(): void;
+  blur(): void;
+  reset(): void;
+  dispose(): void;
+  handleInput(ev: InputEvent): boolean;
   compositionstart(): void;
   compositionupdate(ev: CompositionEvent): void;
   compositionend(): void;
@@ -49,6 +55,7 @@ export interface IBrowser {
   userAgent: string;
   platform: string;
   isFirefox: boolean;
+  isAndroid: boolean;
   isMac: boolean;
   isIpad: boolean;
   isIphone: boolean;

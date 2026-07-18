@@ -332,6 +332,20 @@ export class MockCompositionHelper implements ICompositionHelper {
   public get isComposing(): boolean {
     return false;
   }
+  public get shouldSyncTextArea(): boolean {
+    return true;
+  }
+  public focus(): void {
+  }
+  public blur(): void {
+  }
+  public reset(): void {
+  }
+  public dispose(): void {
+  }
+  public handleInput(ev: InputEvent): boolean {
+    return false;
+  }
   public compositionstart(): void {
     throw new Error('Method not implemented.');
   }

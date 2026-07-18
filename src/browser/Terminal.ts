@@ -264,6 +264,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
    * Binds the desired focus behavior on a given terminal object.
    */
   private _handleTextAreaFocus(ev: KeyboardEvent): void {
+    this._compositionHelper?.focus();
     if (this.coreService.decPrivateModes.sendFocus) {
       this.coreService.triggerDataEvent(C0.ESC + '[I');
     }
@@ -285,6 +286,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
    * Binds the desired blur behavior on a given terminal object.
    */
   private _handleTextAreaBlur(): void {
+    this._compositionHelper?.blur();
     // Text can safely be removed on blur. Doing it earlier could interfere with
     // screen readers reading it out.
     this.textarea!.value = '';
@@ -297,7 +299,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
   }
 
   private _syncTextArea(): void {
-    if (!this.textarea || !this.buffer.isCursorInViewport || this._compositionHelper!.isComposing || !this._renderService) {
+    if (!this.textarea || !this.buffer.isCursorInViewport || this._compositionHelper!.isComposing || !this._compositionHelper!.shouldSyncTextArea || !this._renderService) {
       return;
     }
     const cursorY = this.buffer.ybase + this.buffer.y;
@@ -466,6 +468,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
     this._compositionView = document.createElement('div');
     this._compositionView.classList.add('composition-view');
     this._compositionHelper = this._instantiationService.createInstance(CompositionHelper, this.textarea, this._compositionView);
+    this.register(toDisposable(() => this._compositionHelper?.dispose()));
     this._helperContainer.appendChild(this._compositionView);
 
     // Performance: Add viewport and helper elements from the fragment
@@ -1150,6 +1153,11 @@ export class Terminal extends CoreTerminal implements ITerminal {
    * @param ev The input event to be handled.
    */
   protected _inputEvent(ev: InputEvent): boolean {
+    if (this._compositionHelper!.handleInput(ev)) {
+      this.cancel(ev);
+      return true;
+    }
+
     // Only support emoji IMEs when screen reader mode is disabled as the event must bubble up to
     // support reading out character input which can doubling up input characters
     // Based on these event traces: https://github.com/xtermjs/xterm.js/issues/3679
@@ -1244,6 +1252,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
     this._selectionService?.reset();
     this._decorationService.reset();
     this.viewport?.reset();
+    this._compositionHelper?.reset();
 
     // reattach
     this._customKeyEventHandler = customKeyEventHandler;
