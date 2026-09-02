@@ -178,4 +178,32 @@ describe('AndroidInputTransaction', () => {
     assert.deepEqual(handled, ['j']);
     transaction.dispose();
   });
+
+  it('restores the guard before ordinary printable input after xterm clears the textarea', () => {
+    const textarea = createTextarea();
+    const handled: string[] = [];
+    const transaction = new AndroidInputTransaction(textarea, data => handled.push(data));
+    transaction.activate();
+
+    textarea.value = '';
+    textarea.setSelectionRange(0, 0);
+
+    assert.isFalse(transaction.keydown({ key: 'h', keyCode: 72 } as KeyboardEvent));
+    assert.deepEqual(readAndroidInputProjection(
+      textarea.value,
+      textarea.selectionStart,
+      textarea.selectionEnd
+    ), {
+      value: '',
+      selectionStart: 0,
+      selectionEnd: 0
+    });
+
+    writeProjection(textarea, 'h');
+    transaction.handleInput({ inputType: 'insertText' } as InputEvent);
+    transaction.flush();
+
+    assert.deepEqual(handled, ['h']);
+    transaction.dispose();
+  });
 });

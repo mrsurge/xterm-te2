@@ -1048,6 +1048,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
     // most scenarios.
     if (result.key === C0.ETX || result.key === C0.CR) {
       this.textarea!.value = '';
+      this._compositionHelper!.reset();
     }
 
     this._onKey.fire({ key: result.key, domEvent: event });

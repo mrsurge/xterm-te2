@@ -27,7 +27,9 @@ The integration points are intentionally narrow:
   While Android mode is active, printable text is accepted only through the
   cumulative textarea `input` projection; upstream `keypress` processing is
   bypassed. Keydown remains authoritative for non-text keys and modified
-  terminal commands.
+  terminal commands. Enter and Ctrl+C reseed the guarded Android projection
+  immediately after xterm's accessibility clear, and ordinary printable
+  keydown restores a missing guard before yielding to native textarea input.
 - `src/common/Platform.ts` detects Android from the browser user agent.
 - `css/xterm.css` keeps the native textarea detached and suppresses xterm's
   visible composition projection on Android.

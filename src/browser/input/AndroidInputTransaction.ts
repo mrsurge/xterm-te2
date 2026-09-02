@@ -114,13 +114,7 @@ export class AndroidInputTransaction {
       // begin the next transaction with keyCode 229 before another ordinary
       // keydown gives us a chance to reset, so restore the guarded projection
       // before the browser inserts composition text.
-      if (!readAndroidInputProjection(
-        this._textarea.value,
-        this._textarea.selectionStart,
-        this._textarea.selectionEnd
-      )) {
-        this._writeProjection(this._projection);
-      }
+      this._restoreProjectionIfMissing();
       return false;
     }
     if (
@@ -133,6 +127,7 @@ export class AndroidInputTransaction {
       // Android text is authoritative through the cumulative textarea input
       // projection. Letting xterm also process printable keydown/keypress
       // events can duplicate Gboard's post-composition commit events.
+      this._restoreProjectionIfMissing();
       return false;
     }
     if (ev.keyCode === 16 || ev.keyCode === 17 || ev.keyCode === 18 || ev.keyCode === 20) {
@@ -281,6 +276,16 @@ export class AndroidInputTransaction {
     );
     this._textarea.value = state.value;
     this._textarea.setSelectionRange(state.selectionStart, state.selectionEnd);
+  }
+
+  private _restoreProjectionIfMissing(): void {
+    if (!readAndroidInputProjection(
+      this._textarea.value,
+      this._textarea.selectionStart,
+      this._textarea.selectionEnd
+    )) {
+      this._writeProjection(this._projection);
+    }
   }
 
   private _cancelScheduledWork(): void {

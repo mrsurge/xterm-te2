@@ -126,6 +126,24 @@ describe('Terminal', () => {
       } as KeyboardEvent;
       term.keyDown(evKeyDown);
     });
+    it('should reset composition state after clearing the textarea for enter', () => {
+      const compositionHelper = new MockCompositionHelper();
+      let resetCount = 0;
+      compositionHelper.reset = () => resetCount++;
+      (term as any)._compositionHelper = compositionHelper;
+      (term as any).textarea = { value: 'guarded' };
+      const evKeyDown = {
+        preventDefault: () => { },
+        stopPropagation: () => { },
+        type: 'keydown',
+        key: 'Enter',
+        keyCode: 13
+      } as KeyboardEvent;
+
+      term.keyDown(evKeyDown);
+
+      assert.equal(resetCount, 1);
+    });
     it('should fire the onResize event', (done) => {
       term.onResize(e => {
         assert.equal(typeof e.cols, 'number');
