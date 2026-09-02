@@ -113,4 +113,69 @@ describe('AndroidInputTransaction', () => {
     assert.isFalse(transaction.keydown({ keyCode: 229 } as KeyboardEvent));
     transaction.dispose();
   });
+
+  it('owns printable Android text through textarea input instead of key events', () => {
+    const textarea = createTextarea();
+    const handled: string[] = [];
+    const transaction = new AndroidInputTransaction(textarea, data => handled.push(data));
+    transaction.activate();
+
+    assert.isFalse(transaction.keydown({ key: 'a', keyCode: 65 } as KeyboardEvent));
+    writeProjection(textarea, 'a');
+    transaction.handleInput({ inputType: 'insertText' } as InputEvent);
+    transaction.flush();
+
+    assert.deepEqual(handled, ['a']);
+    transaction.dispose();
+  });
+
+  it('coalesces a post-composition printable key echo into one input', () => {
+    const textarea = createTextarea();
+    const handled: string[] = [];
+    const transaction = new AndroidInputTransaction(textarea, data => handled.push(data));
+    transaction.activate();
+
+    writeProjection(textarea, '-');
+    transaction.handleInput({ inputType: 'insertCompositionText' } as InputEvent);
+
+    // Gboard can echo the committed composition as keydown/keypress/insertText.
+    // Android mode must leave those printable key events to the textarea.
+    textarea.setSelectionRange(1, 2);
+    assert.isFalse(transaction.keydown({ key: '-', keyCode: 0 } as KeyboardEvent));
+    transaction.handleInput({ inputType: 'insertText' } as InputEvent);
+    transaction.flush();
+
+    assert.deepEqual(handled, ['-']);
+    transaction.dispose();
+  });
+
+  it('restores the guard before a keyCode 229 composition after xterm clears the textarea', () => {
+    const textarea = createTextarea();
+    const handled: string[] = [];
+    const transaction = new AndroidInputTransaction(textarea, data => handled.push(data));
+    transaction.activate();
+
+    // xterm's ordinary Enter handling clears the helper after the Android
+    // transaction has reset its internal projection.
+    textarea.value = '';
+    textarea.setSelectionRange(0, 0);
+
+    assert.isFalse(transaction.keydown({ keyCode: 229 } as KeyboardEvent));
+    assert.deepEqual(readAndroidInputProjection(
+      textarea.value,
+      textarea.selectionStart,
+      textarea.selectionEnd
+    ), {
+      value: '',
+      selectionStart: 0,
+      selectionEnd: 0
+    });
+
+    writeProjection(textarea, 'j');
+    transaction.handleInput({ inputType: 'insertCompositionText' } as InputEvent);
+    transaction.flush();
+
+    assert.deepEqual(handled, ['j']);
+    transaction.dispose();
+  });
 });

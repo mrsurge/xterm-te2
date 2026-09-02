@@ -1113,6 +1113,10 @@ export class Terminal extends CoreTerminal implements ITerminal {
       return false;
     }
 
+    if (!this._compositionHelper!.shouldProcessKeypress) {
+      return false;
+    }
+
     this.cancel(ev);
 
     if (ev.charCode) {

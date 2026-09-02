@@ -329,6 +329,7 @@ export class MockViewport implements IViewport {
 }
 
 export class MockCompositionHelper implements ICompositionHelper {
+  public shouldProcessKeypress: boolean = true;
   public get isComposing(): boolean {
     return false;
   }

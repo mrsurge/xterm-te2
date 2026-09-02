@@ -92,6 +92,25 @@ describe('Terminal', () => {
       } as KeyboardEvent;
       term.keyPress(evKeyPress);
     });
+    it('should not process keypress when the composition helper owns printable input', () => {
+      const compositionHelper = new MockCompositionHelper();
+      compositionHelper.shouldProcessKeypress = false;
+      (term as any)._compositionHelper = compositionHelper;
+      let emitted = false;
+      term.onData(() => emitted = true);
+      const evKeyPress = {
+        preventDefault: () => assert.fail('Android-owned keypress must not be canceled'),
+        stopPropagation: () => assert.fail('Android-owned keypress must not be canceled'),
+        type: 'keypress',
+        key: '-',
+        keyCode: 45,
+        charCode: 45,
+        which: 45
+      } as unknown as KeyboardEvent;
+
+      assert.isFalse(term.keyPress(evKeyPress));
+      assert.isFalse(emitted);
+    });
     it('should fire a key event after a keydown DOM event', (done) => {
       term.onKey(e => {
         assert.equal(typeof e.key, 'string');

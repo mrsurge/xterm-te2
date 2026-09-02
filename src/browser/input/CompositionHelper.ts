@@ -29,6 +29,7 @@ export class CompositionHelper {
   private _isComposing: boolean;
   public get isComposing(): boolean { return this._isComposing; }
   public get shouldSyncTextArea(): boolean { return !this._isAndroidInputMode; }
+  public get shouldProcessKeypress(): boolean { return !this._isAndroidInputMode; }
 
   private get _isAndroidInputMode(): boolean {
     return !!this._androidInput && !this._optionsService.rawOptions.screenReaderMode;

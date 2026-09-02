@@ -38,6 +38,7 @@ export type LineData = CharData[];
 export interface ICompositionHelper {
   readonly isComposing: boolean;
   readonly shouldSyncTextArea: boolean;
+  readonly shouldProcessKeypress: boolean;
   focus(): void;
   blur(): void;
   reset(): void;

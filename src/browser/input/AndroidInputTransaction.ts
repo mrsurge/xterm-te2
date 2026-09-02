@@ -110,6 +110,29 @@ export class AndroidInputTransaction {
       this.activate();
     }
     if (ev.keyCode === 229) {
+      // xterm clears its helper textarea after Enter and Ctrl+C. Gboard can
+      // begin the next transaction with keyCode 229 before another ordinary
+      // keydown gives us a chance to reset, so restore the guarded projection
+      // before the browser inserts composition text.
+      if (!readAndroidInputProjection(
+        this._textarea.value,
+        this._textarea.selectionStart,
+        this._textarea.selectionEnd
+      )) {
+        this._writeProjection(this._projection);
+      }
+      return false;
+    }
+    if (
+      ev.key
+      && Array.from(ev.key).length === 1
+      && !ev.ctrlKey
+      && !ev.altKey
+      && !ev.metaKey
+    ) {
+      // Android text is authoritative through the cumulative textarea input
+      // projection. Letting xterm also process printable keydown/keypress
+      // events can duplicate Gboard's post-composition commit events.
       return false;
     }
     if (ev.keyCode === 16 || ev.keyCode === 17 || ev.keyCode === 18 || ev.keyCode === 20) {

@@ -24,6 +24,10 @@ The integration points are intentionally narrow:
 
 - `src/browser/input/CompositionHelper.ts` selects the Android transaction.
 - `src/browser/Terminal.ts` owns focus, input, reset, and disposal lifecycle.
+  While Android mode is active, printable text is accepted only through the
+  cumulative textarea `input` projection; upstream `keypress` processing is
+  bypassed. Keydown remains authoritative for non-text keys and modified
+  terminal commands.
 - `src/common/Platform.ts` detects Android from the browser user agent.
 - `css/xterm.css` keeps the native textarea detached and suppresses xterm's
   visible composition projection on Android.
