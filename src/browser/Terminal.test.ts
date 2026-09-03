@@ -213,6 +213,100 @@ describe('Terminal', () => {
     });
   });
 
+  describe('attachCustomTouchEventHandler', () => {
+    let target: HTMLElement;
+
+    beforeEach(() => {
+      const element = document.createElement('div');
+      const screen = document.createElement('div');
+      target = document.createElement('span');
+      screen.appendChild(target);
+      element.appendChild(screen);
+      (term as any).element = element;
+      (term as any).screenElement = screen;
+      (term as any)._document = document;
+    });
+
+    function touchEvent(type: string, x: number, y: number): TouchEvent & {
+      preventDefaultCalls: number;
+      stopPropagationCalls: number;
+    } {
+      const touch = {
+        identifier: 1,
+        clientX: x,
+        clientY: y,
+        target
+      } as unknown as Touch;
+      const event = {
+        type,
+        target,
+        touches: type === 'touchend' || type === 'touchcancel' ? [] : [touch],
+        changedTouches: [touch]
+      } as unknown as TouchEvent & {
+        preventDefaultCalls: number;
+        stopPropagationCalls: number;
+      };
+      event.preventDefaultCalls = 0;
+      event.stopPropagationCalls = 0;
+      event.preventDefault = () => event.preventDefaultCalls++;
+      event.stopPropagation = () => event.stopPropagationCalls++;
+      return event;
+    }
+
+    it('classifies scrolling once and force-cancels claimed events', () => {
+      const gestures: { type: string, isScroll: boolean }[] = [];
+      term.cancel = (event: Event, force?: boolean) => {
+        assert.isTrue(force);
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+      };
+      term.attachCustomTouchEventHandler((event, isScrollGesture) => {
+        gestures.push({ type: event.type, isScroll: isScrollGesture });
+        return false;
+      });
+
+      const events = [
+        touchEvent('touchstart', 10, 10),
+        touchEvent('touchmove', 14, 14),
+        touchEvent('touchmove', 30, 10),
+        touchEvent('touchmove', 11, 10),
+        touchEvent('touchend', 11, 10)
+      ];
+      for (const event of events) {
+        assert.isFalse(term.touchEvent(event));
+        assert.equal(event.preventDefaultCalls, 1);
+        assert.equal(event.stopPropagationCalls, 1);
+      }
+      assert.deepEqual(gestures, [
+        { type: 'touchstart', isScroll: false },
+        { type: 'touchmove', isScroll: false },
+        { type: 'touchmove', isScroll: true },
+        { type: 'touchmove', isScroll: true },
+        { type: 'touchend', isScroll: true }
+      ]);
+    });
+
+    it('restores xterm processing after the handler is disposed', () => {
+      const disposable = term.attachCustomTouchEventHandler(() => false);
+      assert.exists(term.screenElement!.querySelector('.xterm-touch-capture'));
+      assert.isFalse(term.touchEvent(touchEvent('touchstart', 10, 10)));
+
+      disposable.dispose();
+
+      assert.notExists(term.screenElement!.querySelector('.xterm-touch-capture'));
+      assert.isTrue(term.touchEvent(touchEvent('touchstart', 10, 10)));
+    });
+
+    it('keeps the handler attached across terminal reset', () => {
+      term.attachCustomTouchEventHandler(() => false);
+
+      term.reset();
+
+      assert.isFalse(term.touchEvent(touchEvent('touchstart', 10, 10)));
+    });
+  });
+
   describe('clear', () => {
     it('should clear a buffer equal to rows', () => {
       const promptLine = term.buffer.lines.get(term.buffer.ybase + term.buffer.y);

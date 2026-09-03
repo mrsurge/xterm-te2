@@ -999,6 +999,14 @@ declare module 'xterm' {
     attachCustomKeyEventHandler(customKeyEventHandler: (event: KeyboardEvent) => boolean): void;
 
     /**
+     * Attaches a custom touch event handler which runs before xterm's viewport
+     * touch processing. Return false to claim the event, prevent its browser
+     * default, and stop xterm from processing it.
+     * @returns An `IDisposable` that removes the handler.
+     */
+    attachCustomTouchEventHandler(customTouchEventHandler: (event: TouchEvent, isScrollGesture: boolean) => boolean): IDisposable;
+
+    /**
      * Registers a link provider, allowing a custom parser to be used to match
      * and handle links. Multiple link providers can be used, they will be asked
      * in the order in which they are registered.

@@ -36,6 +36,26 @@ The integration points are intentionally narrow:
 
 Desktop and screen-reader composition retain the upstream path.
 
+## Mobile Touch Ownership Patch
+
+The browser terminal exposes a fork-owned, disposable
+`attachCustomTouchEventHandler` hook. It runs synchronously from non-passive,
+document-capture `touchstart`, `touchmove`, `touchend`, and `touchcancel`
+listeners before rendered text spans or the legacy viewport can claim the
+gesture. Xterm classifies movement past its threshold as scrolling exactly once
+and passes that irreversible decision to the embedder. Returning `false`
+force-cancels browser defaults and prevents the viewport from also processing
+an embedder-owned gesture. While the hook is attached, xterm owns a transparent
+capture element above its renderer so text and blank cells produce the same
+touch target and coordinate stream. The hook survives terminal reset and
+releases both that source-owned element and its capture listeners through its
+disposable.
+
+Code TE2 and the standalone Terminal use this hook to give one mobile gesture
+state machine deterministic ownership even when a touch begins on a DOM-rendered
+text span. Selection handles and menus remain embedder UI rather than xterm
+source.
+
 ## Install And Validate
 
 The 5.3 lock contains stale Node engine declarations. On current Node, install

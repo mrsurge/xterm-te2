@@ -26,7 +26,7 @@ import { addDisposableDomListener } from 'browser/Lifecycle';
 import { Linkifier2 } from 'browser/Linkifier2';
 import * as Strings from 'browser/LocalizableStrings';
 import { OscLinkProvider } from 'browser/OscLinkProvider';
-import { CharacterJoinerHandler, CustomKeyEventHandler, IBrowser, IBufferRange, ICompositionHelper, ILinkifier2, ITerminal, IViewport } from 'browser/Types';
+import { CharacterJoinerHandler, CustomKeyEventHandler, CustomTouchEventHandler, IBrowser, IBufferRange, ICompositionHelper, ILinkifier2, ITerminal, IViewport } from 'browser/Types';
 import { Viewport } from 'browser/Viewport';
 import { BufferDecorationRenderer } from 'browser/decorations/BufferDecorationRenderer';
 import { OverviewRulerRenderer } from 'browser/decorations/OverviewRulerRenderer';
@@ -53,6 +53,16 @@ import { C0, C1_ESCAPED } from 'common/data/EscapeSequences';
 import { evaluateKeyboardEvent } from 'common/input/Keyboard';
 import { toRgbString } from 'common/input/XParseColor';
 import { DecorationService } from 'common/services/DecorationService';
+
+const CUSTOM_TOUCH_SCROLL_THRESHOLD_PX = 8;
+const CUSTOM_TOUCH_CAPTURE_CLASS = 'xterm-touch-capture';
+
+interface ICustomTouchGestureState {
+  identifier: number;
+  startX: number;
+  startY: number;
+  isScrollGesture: boolean;
+}
 import { IDecorationService } from 'common/services/Services';
 import { IDecoration, IDecorationOptions, IDisposable, ILinkProvider, IMarker } from 'xterm';
 import { WindowsOptionsReportType } from '../common/InputHandler';
@@ -77,6 +87,9 @@ export class Terminal extends CoreTerminal implements ITerminal {
   public browser: IBrowser = Browser as any;
 
   private _customKeyEventHandler: CustomKeyEventHandler | undefined;
+  private _customTouchEventHandler: CustomTouchEventHandler | undefined;
+  private _customTouchEventListeners = this.register(new MutableDisposable<IDisposable>());
+  private _customTouchGestureState: ICustomTouchGestureState | undefined;
 
   // browser services
   private _decorationService: DecorationService;
@@ -173,6 +186,9 @@ export class Terminal extends CoreTerminal implements ITerminal {
 
     this.register(toDisposable(() => {
       this._customKeyEventHandler = undefined;
+      this._customTouchEventHandler = undefined;
+      this._customTouchEventListeners.clear();
+      this._customTouchGestureState = undefined;
       this.element?.parentNode?.removeChild(this.element);
     }));
   }
@@ -232,6 +248,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
     super._setup();
 
     this._customKeyEventHandler = undefined;
+    this._customTouchEventHandler = undefined;
   }
 
   /**
@@ -561,6 +578,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
     // Listen for mouse events and translate
     // them into terminal mouse protocols.
     this.bindMouse();
+    this._bindCustomTouchEventHandler();
   }
 
   private _createRenderer(): IRenderer {
@@ -814,7 +832,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
       if (this.coreMouseService.areMouseEventsActive) return;
       this.viewport!.handleTouchStart(ev);
       return this.cancel(ev);
-    }, { passive: true }));
+    }, { passive: false }));
 
     this.register(addDisposableDomListener(el, 'touchmove', (ev: TouchEvent) => {
       if (this.coreMouseService.areMouseEventsActive) return;
@@ -880,6 +898,117 @@ export class Terminal extends CoreTerminal implements ITerminal {
    */
   public attachCustomKeyEventHandler(customKeyEventHandler: CustomKeyEventHandler): void {
     this._customKeyEventHandler = customKeyEventHandler;
+  }
+
+  /**
+   * Attaches a custom touch event handler before xterm's viewport processing.
+   * Returning false claims the event and force-cancels browser default handling.
+   */
+  public attachCustomTouchEventHandler(customTouchEventHandler: CustomTouchEventHandler): IDisposable {
+    this._customTouchEventHandler = customTouchEventHandler;
+    this._bindCustomTouchEventHandler();
+    return toDisposable(() => {
+      if (this._customTouchEventHandler === customTouchEventHandler) {
+        this._customTouchEventHandler = undefined;
+        this._customTouchEventListeners.clear();
+        this._customTouchGestureState = undefined;
+      }
+    });
+  }
+
+  private _bindCustomTouchEventHandler(): void {
+    this._customTouchEventListeners.clear();
+    if (!this._customTouchEventHandler || !this._document || !this.element || !this.screenElement) {
+      return;
+    }
+    const captureElement = this._document.createElement('div');
+    captureElement.className = CUSTOM_TOUCH_CAPTURE_CLASS;
+    captureElement.setAttribute('aria-hidden', 'true');
+    captureElement.style.position = 'absolute';
+    captureElement.style.inset = '0';
+    captureElement.style.zIndex = '9';
+    captureElement.style.background = 'transparent';
+    captureElement.style.touchAction = 'none';
+    captureElement.style.userSelect = 'none';
+    captureElement.style.webkitUserSelect = 'none';
+    this.screenElement.appendChild(captureElement);
+    const listeners = [
+      addDisposableDomListener(this._document, 'touchstart', (event: TouchEvent) => {
+        this._runCustomTouchEventHandler(event);
+      }, { capture: true, passive: false }),
+      addDisposableDomListener(this._document, 'touchmove', (event: TouchEvent) => {
+        this._runCustomTouchEventHandler(event);
+      }, { capture: true, passive: false }),
+      addDisposableDomListener(this._document, 'touchend', (event: TouchEvent) => {
+        this._runCustomTouchEventHandler(event);
+      }, { capture: true, passive: false }),
+      addDisposableDomListener(this._document, 'touchcancel', (event: TouchEvent) => {
+        this._runCustomTouchEventHandler(event);
+      }, { capture: true, passive: false })
+    ];
+    this._customTouchEventListeners.value = toDisposable(() => {
+      for (const listener of listeners) {
+        listener.dispose();
+      }
+      captureElement.remove();
+    });
+  }
+
+  protected _runCustomTouchEventHandler(event: TouchEvent): boolean {
+    const handler = this._customTouchEventHandler;
+    if (!handler || !this.element) {
+      return true;
+    }
+
+    if (event.type === 'touchstart') {
+      if (!(event.target instanceof Node) || !this.element.contains(event.target) || event.touches.length !== 1) {
+        return true;
+      }
+      const touch = event.touches[0];
+      this._customTouchGestureState = {
+        identifier: touch.identifier,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        isScrollGesture: false
+      };
+    }
+
+    const state = this._customTouchGestureState;
+    if (!state) {
+      return true;
+    }
+    const touch = this._findCustomTouch(event, state.identifier);
+    if (!touch) {
+      return true;
+    }
+    if (event.type === 'touchmove' && !state.isScrollGesture) {
+      state.isScrollGesture = Math.hypot(
+        touch.clientX - state.startX,
+        touch.clientY - state.startY
+      ) > CUSTOM_TOUCH_SCROLL_THRESHOLD_PX;
+    }
+
+    const isTerminalGesture = handler(event, state.isScrollGesture) === false;
+    if (event.type === 'touchend' || event.type === 'touchcancel') {
+      this._customTouchGestureState = undefined;
+    }
+    if (isTerminalGesture) {
+      this.cancel(event, true);
+      return false;
+    }
+    return true;
+  }
+
+  private _findCustomTouch(event: TouchEvent, identifier: number): Touch | undefined {
+    for (const list of [event.touches, event.changedTouches]) {
+      for (let index = 0; index < list.length; index++) {
+        const touch = list[index];
+        if (touch.identifier === identifier) {
+          return touch;
+        }
+      }
+    }
+    return undefined;
   }
 
   public registerLinkProvider(linkProvider: ILinkProvider): IDisposable {
@@ -1251,6 +1380,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
     this.options.rows = this.rows;
     this.options.cols = this.cols;
     const customKeyEventHandler = this._customKeyEventHandler;
+    const customTouchEventHandler = this._customTouchEventHandler;
 
     this._setup();
     super.reset();
@@ -1261,6 +1391,8 @@ export class Terminal extends CoreTerminal implements ITerminal {
 
     // reattach
     this._customKeyEventHandler = customKeyEventHandler;
+    this._customTouchEventHandler = customTouchEventHandler;
+    this._bindCustomTouchEventHandler();
 
     // do a full screen refresh
     this.refresh(0, this.rows - 1);
