@@ -178,6 +178,10 @@ export class Terminal extends Disposable implements ITerminalApi {
     this._verifyIntegers(column, row, length);
     this._core.select(column, row, length);
   }
+  public selectWordAt(column: number, row: number): void {
+    this._verifyIntegers(column, row);
+    this._core.selectWordAt(column, row);
+  }
   public getSelection(): string {
     return this._core.getSelection();
   }

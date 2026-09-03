@@ -101,6 +101,7 @@ export interface ISelectionService {
   enable(): void;
   reset(): void;
   setSelection(row: number, col: number, length: number): void;
+  selectWordAt(coords: [number, number]): void;
   selectAll(): void;
   selectLines(start: number, end: number): void;
   clearSelection(): void;

@@ -21,7 +21,7 @@ class TestSelectionService extends SelectionService {
     optionsService: IOptionsService,
     renderService: IRenderService
   ) {
-    super(null!, null!, null!, bufferService, new MockCoreService(), new MockMouseService(), optionsService, renderService, new MockCoreBrowserService());
+    super(null!, { ownerDocument: null } as unknown as HTMLElement, null!, bufferService, new MockCoreService(), new MockMouseService(), optionsService, renderService, new MockCoreBrowserService());
   }
 
   public get model(): SelectionModel { return this._model; }
@@ -29,7 +29,6 @@ class TestSelectionService extends SelectionService {
   public set selectionMode(mode: SelectionMode) { this._activeSelectionMode = mode; }
 
   public selectLineAt(line: number): void { this._selectLineAt(line); }
-  public selectWordAt(coords: [number, number]): void { this._selectWordAt(coords, true); }
   public areCoordsInSelection(coords: [number, number], start: [number, number], end: [number, number]): boolean { return this._areCoordsInSelection(coords, start, end); }
 
   // Disable DOM interaction
@@ -497,4 +496,3 @@ describe('SelectionService', () => {
     });
   });
 });
-

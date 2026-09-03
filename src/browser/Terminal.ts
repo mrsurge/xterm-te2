@@ -1063,6 +1063,13 @@ export class Terminal extends CoreTerminal implements ITerminal {
   }
 
   /**
+   * Selects the word containing a buffer cell.
+   */
+  public selectWordAt(column: number, row: number): void {
+    this._selectionService!.selectWordAt([column, row]);
+  }
+
+  /**
    * Gets the terminal's current selection, this is useful for implementing copy
    * behavior outside of xterm.js.
    */

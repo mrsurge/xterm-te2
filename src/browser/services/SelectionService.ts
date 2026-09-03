@@ -503,8 +503,10 @@ export class SelectionService extends Disposable implements ISelectionService {
       this._screenElement.ownerDocument.removeEventListener('mousemove', this._mouseMoveListener);
       this._screenElement.ownerDocument.removeEventListener('mouseup', this._mouseUpListener);
     }
-    this._coreBrowserService.window.clearInterval(this._dragScrollIntervalTimer);
-    this._dragScrollIntervalTimer = undefined;
+    if (this._dragScrollIntervalTimer !== undefined) {
+      this._coreBrowserService.window.clearInterval(this._dragScrollIntervalTimer);
+      this._dragScrollIntervalTimer = undefined;
+    }
   }
 
   /**
@@ -785,6 +787,14 @@ export class SelectionService extends Disposable implements ISelectionService {
     this._removeMouseDownListeners();
     this._model.selectionStart = [col, row];
     this._model.selectionStartLength = length;
+    this.refresh();
+    this._fireEventIfSelectionChanged();
+  }
+
+  public selectWordAt(coords: [number, number]): void {
+    this._model.clearSelection();
+    this._removeMouseDownListeners();
+    this._selectWordAt(coords, true);
     this.refresh();
     this._fireEventIfSelectionChanged();
   }

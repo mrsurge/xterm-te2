@@ -53,8 +53,10 @@ disposable.
 
 Code TE2 and the standalone Terminal use this hook to give one mobile gesture
 state machine deterministic ownership even when a touch begins on a DOM-rendered
-text span. Selection handles and menus remain embedder UI rather than xterm
-source.
+text span. The fork also exposes `selectWordAt(column, row)` as a narrow public
+bridge to xterm's existing word-boundary implementation, avoiding synthetic
+double-click gestures. Selection handles and menus remain embedder UI rather
+than xterm source.
 
 ## Install And Validate
 

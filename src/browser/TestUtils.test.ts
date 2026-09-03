@@ -123,6 +123,9 @@ export class MockTerminal implements ITerminal {
   public select(column: number, row: number, length: number): void {
     throw new Error('Method not implemented.');
   }
+  public selectWordAt(column: number, row: number): void {
+    throw new Error('Method not implemented.');
+  }
   public selectAll(): void {
     throw new Error('Method not implemented.');
   }
@@ -486,6 +489,9 @@ export class MockSelectionService implements ISelectionService {
     throw new Error('Method not implemented.');
   }
   public setSelection(row: number, col: number, length: number): void {
+    throw new Error('Method not implemented.');
+  }
+  public selectWordAt(coords: [number, number]): void {
     throw new Error('Method not implemented.');
   }
   public selectAll(): void {

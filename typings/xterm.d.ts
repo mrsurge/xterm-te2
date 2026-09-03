@@ -1099,6 +1099,14 @@ declare module 'xterm' {
     select(column: number, row: number, length: number): void;
 
     /**
+     * Selects the word containing a buffer cell using the terminal's configured
+     * word separator and wrapped-line behavior.
+     * @param column The 0-based buffer column.
+     * @param row The 0-based buffer row.
+     */
+    selectWordAt(column: number, row: number): void;
+
+    /**
      * Selects all text within the terminal.
      */
     selectAll(): void;
