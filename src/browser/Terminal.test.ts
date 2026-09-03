@@ -10,6 +10,7 @@ import { CellData } from 'common/buffer/CellData';
 import { MockUnicodeService } from 'common/TestUtils.test';
 import { IMarker, ScrollSource } from 'common/Types';
 import { ICoreService } from 'common/services/Services';
+import jsdom = require('jsdom');
 
 const INIT_COLS = 80;
 const INIT_ROWS = 24;
@@ -213,10 +214,83 @@ describe('Terminal', () => {
     });
   });
 
+  describe('attachCustomInputEventHandler', () => {
+    function inputEvent(type: 'beforeinput' | 'input', data: string): InputEvent & {
+      preventDefaultCalls: number;
+      stopPropagationCalls: number;
+    } {
+      const event = {
+        type,
+        data,
+        inputType: 'insertText',
+        composed: true,
+        preventDefaultCalls: 0,
+        stopPropagationCalls: 0
+      } as unknown as InputEvent & {
+        preventDefaultCalls: number;
+        stopPropagationCalls: number;
+      };
+      event.preventDefault = () => event.preventDefaultCalls++;
+      event.stopPropagation = () => event.stopPropagationCalls++;
+      return event;
+    }
+
+    beforeEach(() => {
+      term.cancel = (event: Event, force?: boolean) => {
+        assert.isTrue(force);
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+      };
+    });
+
+    it('force-cancels claimed beforeinput and input events', () => {
+      let resetCalls = 0;
+      (term as any)._compositionHelper.reset = () => resetCalls++;
+      term.attachCustomInputEventHandler(event => event.data !== 'f');
+
+      const beforeInput = inputEvent('beforeinput', 'f');
+      const input = inputEvent('input', 'f');
+      assert.isTrue(term.beforeInput(beforeInput));
+      assert.isTrue(term.inputEvent(input));
+      assert.equal(resetCalls, 2);
+      for (const event of [beforeInput, input]) {
+        assert.equal(event.preventDefaultCalls, 1);
+        assert.equal(event.stopPropagationCalls, 1);
+      }
+    });
+
+    it('restores normal processing after disposal', () => {
+      const disposable = term.attachCustomInputEventHandler(() => false);
+      assert.isTrue(term.beforeInput(inputEvent('beforeinput', 'f')));
+
+      disposable.dispose();
+
+      assert.isFalse(term.beforeInput(inputEvent('beforeinput', 'f')));
+    });
+
+    it('keeps the handler attached across terminal reset', () => {
+      term.attachCustomInputEventHandler(() => false);
+
+      term.reset();
+
+      assert.isTrue(term.beforeInput(inputEvent('beforeinput', 'f')));
+    });
+  });
+
   describe('attachCustomTouchEventHandler', () => {
+    let dom: jsdom.JSDOM;
+    let document: Document;
+    let hadGlobalNode: boolean;
+    let globalNode: unknown;
     let target: HTMLElement;
 
     beforeEach(() => {
+      dom = new jsdom.JSDOM('');
+      document = dom.window.document;
+      hadGlobalNode = 'Node' in globalThis;
+      globalNode = Reflect.get(globalThis, 'Node');
+      Reflect.set(globalThis, 'Node', dom.window.Node);
       const element = document.createElement('div');
       const screen = document.createElement('div');
       target = document.createElement('span');
@@ -225,6 +299,15 @@ describe('Terminal', () => {
       (term as any).element = element;
       (term as any).screenElement = screen;
       (term as any)._document = document;
+    });
+
+    afterEach(() => {
+      if (hadGlobalNode) {
+        Reflect.set(globalThis, 'Node', globalNode);
+      } else {
+        Reflect.deleteProperty(globalThis, 'Node');
+      }
+      dom.window.close();
     });
 
     function touchEvent(type: string, x: number, y: number): TouchEvent & {
@@ -285,6 +368,27 @@ describe('Terminal', () => {
         { type: 'touchmove', isScroll: true },
         { type: 'touchend', isScroll: true }
       ]);
+    });
+
+    it('retains ownership for the full gesture after touchstart is claimed', () => {
+      term.cancel = (event: Event, force?: boolean) => {
+        assert.isTrue(force);
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+      };
+      term.attachCustomTouchEventHandler(event => event.type !== 'touchstart');
+
+      const events = [
+        touchEvent('touchstart', 10, 10),
+        touchEvent('touchmove', 10, 10),
+        touchEvent('touchend', 10, 10)
+      ];
+      for (const event of events) {
+        assert.isFalse(term.touchEvent(event));
+        assert.equal(event.preventDefaultCalls, 1);
+        assert.equal(event.stopPropagationCalls, 1);
+      }
     });
 
     it('restores xterm processing after the handler is disposed', () => {

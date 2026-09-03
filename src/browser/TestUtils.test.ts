@@ -24,6 +24,8 @@ export class TestTerminal extends Terminal {
   public get curAttrData(): IAttributeData { return (this as any)._inputHandler._curAttrData; }
   public keyDown(ev: any): boolean | undefined { return this._keyDown(ev); }
   public keyPress(ev: any): boolean { return this._keyPress(ev); }
+  public beforeInput(ev: InputEvent): boolean { return this._beforeInputEvent(ev); }
+  public inputEvent(ev: InputEvent): boolean { return this._inputEvent(ev); }
   public touchEvent(ev: TouchEvent): boolean { return this._runCustomTouchEventHandler(ev); }
   public writeP(data: string | Uint8Array): Promise<void> {
     return new Promise(r => this.write(data, r));
@@ -85,6 +87,9 @@ export class MockTerminal implements ITerminal {
     throw new Error('Method not implemented.');
   }
   public attachCustomKeyEventHandler(customKeyEventHandler: (event: KeyboardEvent) => boolean): void {
+    throw new Error('Method not implemented.');
+  }
+  public attachCustomInputEventHandler(customInputEventHandler: (event: InputEvent) => boolean): IDisposable {
     throw new Error('Method not implemented.');
   }
   public attachCustomTouchEventHandler(customTouchEventHandler: (event: TouchEvent, isScrollGesture: boolean) => boolean): IDisposable {

@@ -999,6 +999,14 @@ declare module 'xterm' {
     attachCustomKeyEventHandler(customKeyEventHandler: (event: KeyboardEvent) => boolean): void;
 
     /**
+     * Attaches a custom input event handler which runs before xterm's guarded
+     * input transaction. Return false to claim the event and restore xterm's
+     * helper textarea projection.
+     * @returns An `IDisposable` that removes the handler.
+     */
+    attachCustomInputEventHandler(customInputEventHandler: (event: InputEvent) => boolean): IDisposable;
+
+    /**
      * Attaches a custom touch event handler which runs before xterm's viewport
      * touch processing. Return false to claim the event, prevent its browser
      * default, and stop xterm from processing it.

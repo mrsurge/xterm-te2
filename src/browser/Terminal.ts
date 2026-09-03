@@ -26,7 +26,7 @@ import { addDisposableDomListener } from 'browser/Lifecycle';
 import { Linkifier2 } from 'browser/Linkifier2';
 import * as Strings from 'browser/LocalizableStrings';
 import { OscLinkProvider } from 'browser/OscLinkProvider';
-import { CharacterJoinerHandler, CustomKeyEventHandler, CustomTouchEventHandler, IBrowser, IBufferRange, ICompositionHelper, ILinkifier2, ITerminal, IViewport } from 'browser/Types';
+import { CharacterJoinerHandler, CustomInputEventHandler, CustomKeyEventHandler, CustomTouchEventHandler, IBrowser, IBufferRange, ICompositionHelper, ILinkifier2, ITerminal, IViewport } from 'browser/Types';
 import { Viewport } from 'browser/Viewport';
 import { BufferDecorationRenderer } from 'browser/decorations/BufferDecorationRenderer';
 import { OverviewRulerRenderer } from 'browser/decorations/OverviewRulerRenderer';
@@ -62,6 +62,7 @@ interface ICustomTouchGestureState {
   startX: number;
   startY: number;
   isScrollGesture: boolean;
+  isClaimed: boolean;
 }
 import { IDecorationService } from 'common/services/Services';
 import { IDecoration, IDecorationOptions, IDisposable, ILinkProvider, IMarker } from 'xterm';
@@ -87,6 +88,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
   public browser: IBrowser = Browser as any;
 
   private _customKeyEventHandler: CustomKeyEventHandler | undefined;
+  private _customInputEventHandler: CustomInputEventHandler | undefined;
   private _customTouchEventHandler: CustomTouchEventHandler | undefined;
   private _customTouchEventListeners = this.register(new MutableDisposable<IDisposable>());
   private _customTouchGestureState: ICustomTouchGestureState | undefined;
@@ -186,6 +188,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
 
     this.register(toDisposable(() => {
       this._customKeyEventHandler = undefined;
+      this._customInputEventHandler = undefined;
       this._customTouchEventHandler = undefined;
       this._customTouchEventListeners.clear();
       this._customTouchGestureState = undefined;
@@ -248,6 +251,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
     super._setup();
 
     this._customKeyEventHandler = undefined;
+    this._customInputEventHandler = undefined;
     this._customTouchEventHandler = undefined;
   }
 
@@ -398,6 +402,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
     this.register(addDisposableDomListener(this.textarea!, 'compositionstart', () => this._compositionHelper!.compositionstart()));
     this.register(addDisposableDomListener(this.textarea!, 'compositionupdate', (e: CompositionEvent) => this._compositionHelper!.compositionupdate(e)));
     this.register(addDisposableDomListener(this.textarea!, 'compositionend', () => this._compositionHelper!.compositionend()));
+    this.register(addDisposableDomListener(this.textarea!, 'beforeinput', (ev: InputEvent) => this._beforeInputEvent(ev), true));
     this.register(addDisposableDomListener(this.textarea!, 'input', (ev: InputEvent) => this._inputEvent(ev), true));
     this.register(this.onRender(() => this._compositionHelper!.updateCompositionElements()));
   }
@@ -901,6 +906,19 @@ export class Terminal extends CoreTerminal implements ITerminal {
   }
 
   /**
+   * Attaches a custom input event handler before xterm's input transaction.
+   * Returning false claims the event and restores xterm's guarded input state.
+   */
+  public attachCustomInputEventHandler(customInputEventHandler: CustomInputEventHandler): IDisposable {
+    this._customInputEventHandler = customInputEventHandler;
+    return toDisposable(() => {
+      if (this._customInputEventHandler === customInputEventHandler) {
+        this._customInputEventHandler = undefined;
+      }
+    });
+  }
+
+  /**
    * Attaches a custom touch event handler before xterm's viewport processing.
    * Returning false claims the event and force-cancels browser default handling.
    */
@@ -969,7 +987,8 @@ export class Terminal extends CoreTerminal implements ITerminal {
         identifier: touch.identifier,
         startX: touch.clientX,
         startY: touch.clientY,
-        isScrollGesture: false
+        isScrollGesture: false,
+        isClaimed: false
       };
     }
 
@@ -988,7 +1007,10 @@ export class Terminal extends CoreTerminal implements ITerminal {
       ) > CUSTOM_TOUCH_SCROLL_THRESHOLD_PX;
     }
 
-    const isTerminalGesture = handler(event, state.isScrollGesture) === false;
+    if (handler(event, state.isScrollGesture) === false) {
+      state.isClaimed = true;
+    }
+    const isTerminalGesture = state.isClaimed;
     if (event.type === 'touchend' || event.type === 'touchcancel') {
       this._customTouchGestureState = undefined;
     }
@@ -1294,6 +1316,10 @@ export class Terminal extends CoreTerminal implements ITerminal {
    * @param ev The input event to be handled.
    */
   protected _inputEvent(ev: InputEvent): boolean {
+    if (this._runCustomInputEventHandler(ev)) {
+      return true;
+    }
+
     if (this._compositionHelper!.handleInput(ev)) {
       this.cancel(ev);
       return true;
@@ -1319,6 +1345,19 @@ export class Terminal extends CoreTerminal implements ITerminal {
     }
 
     return false;
+  }
+
+  protected _beforeInputEvent(ev: InputEvent): boolean {
+    return this._runCustomInputEventHandler(ev);
+  }
+
+  private _runCustomInputEventHandler(ev: InputEvent): boolean {
+    if (!this._customInputEventHandler || this._customInputEventHandler(ev) !== false) {
+      return false;
+    }
+    this._compositionHelper!.reset();
+    this.cancel(ev, true);
+    return true;
   }
 
   /**
@@ -1387,6 +1426,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
     this.options.rows = this.rows;
     this.options.cols = this.cols;
     const customKeyEventHandler = this._customKeyEventHandler;
+    const customInputEventHandler = this._customInputEventHandler;
     const customTouchEventHandler = this._customTouchEventHandler;
 
     this._setup();
@@ -1398,6 +1438,7 @@ export class Terminal extends CoreTerminal implements ITerminal {
 
     // reattach
     this._customKeyEventHandler = customKeyEventHandler;
+    this._customInputEventHandler = customInputEventHandler;
     this._customTouchEventHandler = customTouchEventHandler;
     this._bindCustomTouchEventHandler();
 

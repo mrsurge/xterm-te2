@@ -6,7 +6,7 @@
 - TE2 origin: `https://github.com/mrsurge/xterm-te2.git`
 - Baseline tag: `5.3.0`
 - Baseline commit: `2e02c37e528c1abc200ce401f49d0d7eae330e63`
-- TE2 branch: `te2-android-ime`
+- TE2 branch: `te2-mobile-touch-routing`
 
 The TE2 framework currently pins browser xterm, `xterm-headless`, and the
 serialize addon to the 5.3 release family. Keep this branch on that baseline
@@ -30,6 +30,11 @@ The integration points are intentionally narrow:
   terminal commands. Enter and Ctrl+C reseed the guarded Android projection
   immediately after xterm's accessibility clear, and ordinary printable
   keydown restores a missing guard before yielding to native textarea input.
+  Its disposable `attachCustomInputEventHandler` hook runs before both
+  `beforeinput` and `input`, survives terminal reset, and restores the guarded
+  projection when an embedder claims an event. TE2's mobile Ctrl helper uses
+  this source hook to translate Gboard's authoritative `InputEvent.data`
+  without racing the helper textarea or duplicating the trailing input event.
 - `src/common/Platform.ts` detects Android from the browser user agent.
 - `css/xterm.css` keeps the native textarea detached and suppresses xterm's
   visible composition projection on Android.
@@ -45,11 +50,13 @@ listeners before rendered text spans or the legacy viewport can claim the
 gesture. Xterm classifies movement past its threshold as scrolling exactly once
 and passes that irreversible decision to the embedder. Returning `false`
 force-cancels browser defaults and prevents the viewport from also processing
-an embedder-owned gesture. While the hook is attached, xterm owns a transparent
-capture element above its renderer so text and blank cells produce the same
-touch target and coordinate stream. The hook survives terminal reset and
-releases both that source-owned element and its capture listeners through its
-disposable.
+an embedder-owned gesture. Once any event is claimed, xterm retains ownership
+through the remaining move/end/cancel events so sub-threshold movement cannot
+leak back into Chromium's native scrolling. While the hook is attached, xterm
+owns a transparent capture element above its renderer so text and blank cells
+produce the same touch target and coordinate stream. The hook survives terminal
+reset and releases both that source-owned element and its capture listeners
+through its disposable.
 
 Code TE2 and the standalone Terminal use this hook to give one mobile gesture
 state machine deterministic ownership even when a touch begins on a DOM-rendered
@@ -71,6 +78,7 @@ npx --yes yarn@1.22.22 install --frozen-lockfile --ignore-scripts --ignore-engin
   src/browser/input/AndroidInputTransaction.test.ts \
   src/browser/input/CompositionHelper.ts \
   src/browser/Terminal.ts \
+  src/browser/Terminal.test.ts \
   src/browser/TestUtils.test.ts \
   src/browser/Types.d.ts \
   src/common/Platform.ts
